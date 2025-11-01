@@ -1,92 +1,100 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 
-const authenticated = require('../middleware/authenticated');     // sets req.user = { userId, role }
-const roleCheck = require('../middleware/roleCheck');    // roleCheck('customer')
-
+const authenticated = require('../middleware/authenticated');
+const roleCheck = require('../middleware/roleCheck');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const Order = require('../models/Order');               // your orderSchema model
+const Order = require('../models/Order');
 
-// POST /checkout
 router.post('/', authenticated, roleCheck('customer'), async (req, res) => {
-  const session = await mongoose.startSession();
   try {
-    await session.withTransaction(async () => {
-      const userId = req.user.userId;
+    const userId = req.user.userId;
 
-      // 1) Load cart
-      const cart = await Cart.findOne({ userId }).session(session);
-      if (!cart || cart.items.length === 0) {
-        return res.status(400).json({ error: 'Cart is empty' });
-      }
+    // 1) Load cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ error: 'Cart is empty' });
+    }
 
-      // 2) Group items by shopId to create one order per shop
-      const byShop = cart.items.reduce((acc, it) => {
-        const k = it.shopId.toString();
-        (acc[k] ||= []).push(it);
-        return acc;
-      }, {});
+    // 2) Group by shop
+    const byShop = cart.items.reduce((acc, it) => {
+      const k = it.shopId.toString();
+      (acc[k] ||= []).push(it);
+      return acc;
+    }, {});
 
-      const createdOrders = [];
+    const createdOrderIds = [];
 
-      // 3) For each shop, validate stock & price, create order, decrement inventory
-      for (const [shopId, items] of Object.entries(byShop)) {
-        const productIds = items.map(i => i.productId);
-        const products = await Product.find({ _id: { $in: productIds } })
-          .select('price quantity shopId')
-          .session(session);
+    // 3-5) For each shop
+    for (const [shopId, items] of Object.entries(byShop)) {
+      const productIds = items.map(i => i.productId);
 
-        const pmap = new Map(products.map(p => [p._id.toString(), p]));
+      const products = await Product.find({ _id: { $in: productIds } })
+        .select('price stock shopId name');
 
-        let totalAmount = 0;
-        const orderProducts = [];
+      const pmap = new Map(products.map(p => [p._id.toString(), p]));
 
-        for (const line of items) {
-          const p = pmap.get(line.productId.toString());
-          if (!p) throw new Error('Product not found during checkout');
-          if (p.shopId.toString() !== shopId) throw new Error('Product-shop mismatch');
-          if (p.quantity < line.quantity) throw new Error('Insufficient stock');
+      let totalAmount = 0;
+      const orderProducts = [];
 
-          const price = p.price; // authoritative price
-          totalAmount += price * line.quantity;
-
-          orderProducts.push({
-            productId: p._id,
-            quantity: line.quantity,
-            price
-          });
-
-          // decrement stock
-          p.quantity -= line.quantity;
-          await p.save({ session });
+      // Validate
+      for (const line of items) {
+        const p = pmap.get(line.productId.toString());
+        if (!p) return res.status(400).json({ error: 'Product not found during checkout' });
+        if (p.shopId.toString() !== shopId) {
+          return res.status(400).json({ error: 'Product-shop mismatch' });
         }
-
-        // 4) Create the order
-        const [order] = await Order.create([{
-          customerId: userId,
-          shopId,
-          products: orderProducts,
-          totalAmount,
-          status: 'pending'
-        }], { session });
-
-        createdOrders.push(order);
+        const available = Number.isFinite(p.stock) ? p.stock : 0;
+        if (available < line.quantity) {
+          return res.status(400).json({ error: `Insufficient stock for ${p.name}` });
+        }
       }
 
-      // 5) Clear cart
-      cart.items = [];
-      cart.subTotal = 0;
-      await cart.save({ session });
+      // Build order
+      for (const line of items) {
+        const p = pmap.get(line.productId.toString());
+        const price = p.price;
+        totalAmount += price * line.quantity;
+        orderProducts.push({
+          productId: p._id,
+          quantity: line.quantity,
+          price
+        });
+      }
 
-      return res.status(201).json({ orders: createdOrders });
-    });
+      // Create order
+      const order = await Order.create({
+        customerId: userId,
+        shopId,
+        products: orderProducts,
+        totalAmount,
+        status: 'pending'
+      });
+      createdOrderIds.push(order._id);
+
+      // Decrement stock
+      for (const line of items) {
+        const p = pmap.get(line.productId.toString());
+        const newStock = Math.max(0, (Number.isFinite(p.stock) ? p.stock : 0) - line.quantity);
+        await Product.updateOne({ _id: p._id }, { $set: { stock: newStock } });
+      }
+    }
+
+    // 5) Clear cart
+    cart.items = [];
+    cart.subTotal = 0;
+    await cart.save();
+
+    // Populate for UI
+    const populated = await Order.find({ _id: { $in: createdOrderIds } })
+      .populate({ path: 'shopId', select: 'name' })
+      .populate({ path: 'products.productId', select: 'name price' });
+
+    return res.status(201).json({ orders: populated });
   } catch (err) {
-    console.error('Checkout error:', err);
+    console.error('Checkout error (standalone mode):', err);
     return res.status(400).json({ error: err.message || 'Checkout failed' });
-  } finally {
-    session.endSession();
   }
 });
 

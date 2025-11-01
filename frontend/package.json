@@ -10,8 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "@fontsource-variable/inter": "^5.2.8",
+    "@formkit/auto-animate": "^0.9.0",
+    "axios": "^1.12.2",
+    "flowbite": "^3.1.2",
+    "flowbite-react": "^0.12.9",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.9.3",
+    "react-toastify": "^11.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

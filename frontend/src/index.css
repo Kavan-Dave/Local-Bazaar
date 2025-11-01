@@ -1,1 +1,10 @@
-@import "tailwindcss"; 
+/* Import Tailwind CSS base, components, and utilities */
+@import "tailwindcss";
+
+/* Global body styles */
+body {
+  font-family: "Inter Variable", sans-serif;
+  background-color: #f9fafb; /* Light gray background for a soft, modern look */
+  margin: 0;
+  padding: 0;
+}

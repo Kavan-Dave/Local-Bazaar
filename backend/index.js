@@ -6,11 +6,6 @@ require('dotenv').config();
 
 const app = express();
 
-/**
- * Core middleware
- * - JSON body parsing
- * - CORS for Vite dev server and optional public tunnels
- */
 app.use(express.json());
 app.use(
   cors({

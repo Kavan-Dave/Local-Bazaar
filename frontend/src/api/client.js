@@ -1,86 +1,137 @@
-const base = "/api";
+// import axios from "axios";
 
-let accessToken = null;
+// const API = axios.create({
+//   baseURL: "http://localhost:5000",
+//   withCredentials: true,
+// });
 
-export function setToken(token) {
-  accessToken = token;
+// // Token helpers
+// function setToken(token) {
+//   API.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+//   localStorage.setItem("lb_token", token);
+// }
+// function clearToken() {
+//   delete API.defaults.headers.common["Authorization"];
+//   localStorage.removeItem("lb_token");
+// }
+// function loadTokenFromStorage() {
+//   const t = localStorage.getItem("lb_token");
+//   if (t) API.defaults.headers.common["Authorization"] = `Bearer ${t}`;
+//   return t;
+// }
+
+// // API surface
+// const api = {
+//   // Auth
+//   login: (payload) => API.post("/users/login", payload).then((r) => r.data),
+//   register: (payload) => API.post("/users/register", payload).then((r) => r.data),
+//   me: () => API.get("/users/me").then((r) => r.data),
+//   logout: () => API.post("/users/logout").then((r) => r.data),
+
+//   // Products
+//   listProducts: () => API.get("/products").then((r) => r.data),
+//   listMyProducts: () => API.get("/products/mine").then((r) => r.data),
+//   getProduct: (id) => API.get(`/products/${id}`).then((r) => r.data),
+//   addProduct: (payload) => API.post("/products", payload).then((r) => r.data),
+//   updateProduct: (id, payload) => API.put(`/products/${id}`, payload).then((r) => r.data),
+
+//   // Cart
+//   getCart: () => API.get("/cart").then((r) => r.data),
+//   addToCart: (payload) => API.post("/cart/items", payload).then((r) => r.data),
+//   setCartItemQuantity: (productId, quantity) =>
+//     API.patch(`/cart/items/${productId}`, { quantity }).then((r) => r.data),
+//   removeFromCart: (productId) => API.delete(`/cart/items/${productId}`).then((r) => r.data),
+//   clearCart: () => API.delete("/cart").then((r) => r.data),
+
+//   // Orders
+//   placeOrder: () => API.post("/checkout").then((r) => r.data), // uses your checkout route
+//   myOrders: () => API.get("/orders").then((r) => r.data),
+//   getShopOrders: () => API.get("/orders/shoporders").then(r => r.data),
+//   deleteOrder(orderId) {
+//   return axios.delete(`/orders/${orderId}`, {
+//     headers: { Authorization: `Bearer ${getToken()}` }
+//   }).then(res => res.data);
+// },
+
+//   // Vendor
+//   vendorSetQuantity: (productId, quantity) =>
+//     API.put(`/products/${productId}`, { quantity }).then((r) => r.data), // backend maps quantity -> stock
+
+//   // Vendor order actions
+//   vendorAccept: (orderId) =>
+//     API.patch(`/orders/${orderId}/accept`).then((r) => r.data),
+//   vendorSetStatus: (orderId, status) =>
+//     API.patch(`/orders/${orderId}/status`, { status }).then((r) => r.data),
+// };
+
+// export default api;
+// export { api, API, setToken, clearToken, loadTokenFromStorage };
+import axios from "axios";
+
+const API = axios.create({
+  baseURL: "http://localhost:5000",
+  withCredentials: true,
+});
+
+// Token helpers
+function setToken(token) {
+  API.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  localStorage.setItem("lb_token", token);
 }
 
-export function clearToken() {
-  accessToken = null;
+function clearToken() {
+  delete API.defaults.headers.common["Authorization"];
+  localStorage.removeItem("lb_token");
 }
 
-async function request(path, { method = "GET", body, headers = {} } = {}) {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
-
-  // Try parsing JSON only if content-type indicates JSON
-  const contentType = res.headers.get("content-type") || "";
-  const text = await res.text();
-  const data =
-    text && contentType.includes("application/json")
-      ? JSON.parse(text)
-      : text || null;
-
-  if (!res.ok) {
-    const err = new Error(
-      (data && data.error) || res.statusText || "Request failed"
-    );
-    err.status = res.status;
-    err.body = data;
-    throw err;
-  }
-
-  return data;
+function loadTokenFromStorage() {
+  const t = localStorage.getItem("lb_token");
+  if (t) API.defaults.headers.common["Authorization"] = `Bearer ${t}`;
+  return t;
 }
 
-// Auth
-export const api = {
-  login: (payload) => request("/users/login", { method: "POST", body: payload }),
-  register: (payload) =>
-    request("/users/register", { method: "POST", body: payload }),
-  me: () => request("/users/me"),
+function getToken() {
+  return localStorage.getItem("lb_token");
+}
+
+// API surface
+const api = {
+  // Auth
+  login: (payload) => API.post("/users/login", payload).then((r) => r.data),
+  register: (payload) => API.post("/users/register", payload).then((r) => r.data),
+  me: () => API.get("/users/me").then((r) => r.data),
+  logout: () => API.post("/users/logout").then((r) => r.data),
 
   // Products
-  listProducts: () => request("/products"),
-  getProduct: (id) => request(`/products/${id}`),
+  listProducts: () => API.get("/products").then((r) => r.data),
+  listMyProducts: () => API.get("/products/mine").then((r) => r.data),
+  getProduct: (id) => API.get(`/products/${id}`).then((r) => r.data),
+  addProduct: (payload) => API.post("/products", payload).then((r) => r.data),
+  updateProduct: (id, payload) => API.put(`/products/${id}`, payload).then((r) => r.data),
 
   // Cart
-  getCart: () => request("/cart"),
-  addToCart: (payload) =>
-    request("/cart/items", { method: "POST", body: payload }),
-  setQuantity: (productId, quantity) =>
-    request(`/cart/items/${productId}`, { method: "PATCH", body: { quantity } }),
-  removeFromCart: (productId) =>
-    request(`/cart/items/${productId}`, { method: "DELETE" }),
-  clearCart: () => request("/cart", { method: "DELETE" }),
+  getCart: () => API.get("/cart").then((r) => r.data),
+  addToCart: (payload) => API.post("/cart/items", payload).then((r) => r.data),
+  setCartItemQuantity: (productId, quantity) =>
+    API.patch(`/cart/items/${productId}`, { quantity }).then((r) => r.data),
+  removeFromCart: (productId) => API.delete(`/cart/items/${productId}`).then((r) => r.data),
+  clearCart: () => API.delete("/cart").then((r) => r.data),
 
-  // Checkout
-  checkout: () => request("/checkout", { method: "POST" }),
+  // Orders
+  placeOrder: () => API.post("/checkout").then((r) => r.data),
+  myOrders: () => API.get("/orders").then((r) => r.data),
+  getShopOrders: () => API.get("/orders/shoporders").then((r) => r.data),
+  deleteOrder: (orderId) => API.delete(`/orders/${orderId}`).then((r) => r.data),
 
-  // Orders (customer)
-  myOrders: () => request("/orders"),
-  myHistory: () => request("/orders/me/history"),
-  myPending: () => request("/orders/pending"),
-  shopHistory: (shopId) => request(`/orders/${shopId}/orders/history`),
-
-  // Vendor actions
-  vendorAccept: (orderId) =>
-    request(`/orders/${orderId}/accept`, { method: "PATCH" }),
-  vendorSetStatus: (orderId, status) =>
-    request(`/orders/${orderId}/status`, { method: "PATCH", body: { status } }),
+  // Vendor
   vendorSetQuantity: (productId, quantity) =>
-    request(`/shops/products/${productId}/quantity`, {
-      method: "PATCH",
-      body: { quantity },
-    }),
+    API.put(`/products/${productId}`, { quantity }).then((r) => r.data),
+
+  // Vendor order actions
+  vendorAccept: (orderId) => API.patch(`/orders/${orderId}/accept`).then((r) => r.data),
+  vendorSetStatus: (orderId, status) =>
+    API.patch(`/orders/${orderId}/status`, { status }).then((r) => r.data),
 };
 
 export default api;
+export { api, API, setToken, clearToken, loadTokenFromStorage, getToken };

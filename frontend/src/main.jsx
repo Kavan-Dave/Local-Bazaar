@@ -1,15 +1,17 @@
-src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
-import "@fontsource/inter/variable.css";
+import { BrowserRouter } from "react-router-dom";
+import { AuthProvider } from "./hooks/AuthContext.jsx";
 import "./index.css";
 
+// Entry point rendering the app with routing and auth context
 ReactDOM.createRoot(document.getElementById("root")).render(
-<React.StrictMode>
-<BrowserRouter>
-<App />
-</BrowserRouter>
-</React.StrictMode>
+  <React.StrictMode>
+    <AuthProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </AuthProvider>
+  </React.StrictMode>
 );

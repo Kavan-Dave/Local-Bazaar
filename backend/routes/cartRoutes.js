@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 
 const authenticated = require('../middleware/authenticated');     // attaches req.user { userId, role }
-const roleCheck = require('../middleware/roleCheck');    // checks req.user.role
-const Cart = require('../models/Cart');                  // Cart model per earlier schema
-const Product = require('../models/Product');            // Product has price, shopId
+const roleCheck = require('../middleware/roleCheck');             // checks req.user.role
+const Cart = require('../models/Cart');                           // Cart model per earlier schema
+const Product = require('../models/Product');                     // Product has price, shopId
 const mongoose = require('mongoose');
 
 // Helpers
@@ -51,12 +51,19 @@ router.post(
   async (req, res) => {
     try {
       const { productId, quantity } = req.body || {};
+      console.log('POST /cart/items IN', { user: req.user, productId, quantity });
+
       if (!isValidObjectId(productId) || !Number.isInteger(quantity) || quantity <= 0) {
         return res.status(400).json({ error: 'productId must be valid and quantity must be > 0' });
       }
 
-      const product = await Product.findById(productId).select('price shopId');
+      const product = await Product.findById(productId).select('price shopId quantity');
       if (!product) return res.status(404).json({ error: 'Product not found' });
+
+      // Optional: if your schema requires shopId, fail early with clear message
+      if (!product.shopId) {
+        return res.status(400).json({ error: 'Product is not linked to a shop' });
+      }
 
       const userId = req.user.userId;
       let cart = await Cart.findOne({ userId });
@@ -65,7 +72,7 @@ router.post(
       const idx = cart.items.findIndex(i => i.productId.toString() === productId);
       if (idx > -1) {
         cart.items[idx].quantity += quantity;
-        cart.items[idx].price = product.price;           // snapshot latest price
+        cart.items[idx].price = product.price;          // snapshot latest price
         cart.items[idx].shopId = product.shopId;
         cart.items[idx].total = cart.items[idx].quantity * cart.items[idx].price;
       } else {
@@ -79,7 +86,10 @@ router.post(
       }
 
       recomputeSubTotal(cart);
-      await cart.save();
+      await cart.save().catch(err => {
+        console.error('Cart save error', err);
+        throw err;
+      });
 
       const populated = await cart.populate([
         { path: 'items.productId', select: 'name price' },
@@ -89,7 +99,7 @@ router.post(
       return res.json(populated);
     } catch (err) {
       console.error('Add to cart error:', err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: err.message || 'Server error' });
     }
   }
 );
@@ -124,14 +134,21 @@ router.patch(
         const product = await Product.findById(productId).select('price shopId');
         if (!product) return res.status(404).json({ error: 'Product not found' });
 
+        if (!product.shopId) {
+          return res.status(400).json({ error: 'Product is not linked to a shop' });
+        }
+
         cart.items[idx].quantity = quantity;
-        cart.items[idx].price = product.price;           // snapshot latest price
+        cart.items[idx].price = product.price;          // snapshot latest price
         cart.items[idx].shopId = product.shopId;
         cart.items[idx].total = quantity * product.price;
       }
 
       recomputeSubTotal(cart);
-      await cart.save();
+      await cart.save().catch(err => {
+        console.error('Cart save error', err);
+        throw err;
+      });
 
       const populated = await cart.populate([
         { path: 'items.productId', select: 'name price' },
@@ -141,7 +158,7 @@ router.patch(
       return res.json(populated);
     } catch (err) {
       console.error('Set quantity error:', err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: err.message || 'Server error' });
     }
   }
 );
@@ -172,7 +189,10 @@ router.delete(
       }
 
       recomputeSubTotal(cart);
-      await cart.save();
+      await cart.save().catch(err => {
+        console.error('Cart save error', err);
+        throw err;
+      });
 
       const populated = await cart.populate([
         { path: 'items.productId', select: 'name price' },
@@ -182,7 +202,7 @@ router.delete(
       return res.json(populated);
     } catch (err) {
       console.error('Remove item error:', err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: err.message || 'Server error' });
     }
   }
 );
@@ -202,12 +222,15 @@ router.delete(
 
       cart.items = [];
       cart.subTotal = 0;
-      await cart.save();
+      await cart.save().catch(err => {
+        console.error('Cart save error', err);
+        throw err;
+      });
 
       return res.json({ items: [], subTotal: 0 });
     } catch (err) {
       console.error('Empty cart error:', err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.status(500).json({ error: err.message || 'Server error' });
     }
   }
 );
