@@ -297,5 +297,3 @@ This project is created for educational purposes as part of a B.Tech academic pr
 - Open Source Contributors
 
 ---
-
-**Note:** This project was developed as part of the Advanced Topics in Web Development course (Semester 5, 2025).
